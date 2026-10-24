@@ -46,4 +46,15 @@ public class GlobalExceptionHandler {
                         LocalDateTime.now()
                 ));
     }
+
+    @ExceptionHandler(LimiteDiarioExcedidoException.class)
+    public ResponseEntity<ErroResponse> handlerLimiteDiarioExcedido(LimiteDiarioExcedidoException ex){
+        return ResponseEntity
+                .status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(new ErroResponse(
+                        ex.getMessage(),
+                        "LIMITE_DIARIO_EXCEDIDO",
+                        LocalDateTime.now()
+                ));
+    }
 }

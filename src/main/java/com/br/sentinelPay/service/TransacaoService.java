@@ -7,6 +7,7 @@ import com.br.sentinelPay.entites.Outbox;
 import com.br.sentinelPay.entites.StatusOutbox;
 import com.br.sentinelPay.entites.StatusTransacao;
 import com.br.sentinelPay.entites.Transacao;
+import com.br.sentinelPay.exception.LimiteDiarioExcedidoException;
 import com.br.sentinelPay.exception.PayLoadJsonException;
 import com.br.sentinelPay.exception.TransacaoDuplicadaException;
 import com.br.sentinelPay.exception.TransacaoNaoEncontradaException;
@@ -24,8 +25,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Duration;
-import java.util.List;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Service
@@ -48,11 +50,14 @@ public class TransacaoService {
             throw new TransacaoDuplicadaException("Transação idêntica já em processamento");
         }
 
+        validarLimiteDiario(request);
+
         Transacao transacao = mapper.toEntity(request);
         transacao.setStatus(StatusTransacao.PENDENTE);
         Transacao transacaoSalva = repository.save(transacao);
 
         resgistrarOutbox(transacaoSalva);
+        atualizarLimiteDiario(request);
 
         return mapper.toResponse(transacaoSalva);
     }
@@ -98,5 +103,30 @@ public class TransacaoService {
         Transacao transacao = repository.findById(id)
                 .orElseThrow(() -> new TransacaoNaoEncontradaException("Transação não encontrada"));
         return mapper.toResponse(transacao);
+    }
+
+    private String gerarChaveLimiteDiario(TransacaoRequest request){
+        return "limite_diario:" + request.contaOrigem() + ":" + LocalDate.now();
+    }
+
+    private void validarLimiteDiario(TransacaoRequest request){
+        String chave = gerarChaveLimiteDiario(request);
+        String resultado = redisTemplate.opsForValue().get(chave);
+
+        BigDecimal limiteMaximo = BigDecimal.valueOf(10000);
+
+        BigDecimal limiteGasto = (resultado == null) ? BigDecimal.ZERO : new BigDecimal(resultado);
+
+        BigDecimal totalProjetado = limiteGasto.add(request.valor());
+
+        if(totalProjetado.compareTo(limiteMaximo)>0){
+            throw new LimiteDiarioExcedidoException("Limite diario foi excedido");
+        }
+    }
+
+    private void atualizarLimiteDiario(TransacaoRequest request){
+        String chave = gerarChaveLimiteDiario(request);
+        redisTemplate.opsForValue().increment(chave, request.valor().doubleValue());
+        redisTemplate.expire(chave, Duration.ofDays(1));
     }
 }
