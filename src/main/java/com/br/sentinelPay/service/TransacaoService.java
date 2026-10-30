@@ -113,7 +113,7 @@ public class TransacaoService {
         String chave = gerarChaveLimiteDiario(request);
         String resultado = redisTemplate.opsForValue().get(chave);
 
-        BigDecimal limiteMaximo = BigDecimal.valueOf(10000);
+        BigDecimal limiteMaximo = BigDecimal.valueOf(20000);
 
         BigDecimal limiteGasto = (resultado == null) ? BigDecimal.ZERO : new BigDecimal(resultado);
 
